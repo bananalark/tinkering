@@ -18,7 +18,7 @@ import * as posenet from "@tensorflow-models/posenet";
 import dat from "dat.gui";
 import Stats from "stats.js";
 
-import { drawBoundingBox, drawKeypoints, drawSkeleton } from "./demo_util";
+import { drawBoundingBox, drawKeypoints, drawSkeleton, drawLineBetweenPoints } from "./demo_util";
 
 export const videoWidth = 600;
 const videoHeight = 500;
@@ -77,7 +77,7 @@ async function loadVideo() {
 }
 
 const guiState = {
-  algorithm: "multi-pose",
+  algorithm: "single-pose",
   input: {
     mobileNetArchitecture: isMobile() ? "0.50" : "0.75",
     outputStride: 16,
@@ -105,95 +105,95 @@ const guiState = {
 /**
  * Sets up dat.gui controller on the top-right of the window
  */
-function setupGui(cameras, net) {
-  guiState.net = net;
+// function setupGui(cameras, net) {
+//   guiState.net = net;
 
-  if (cameras.length > 0) {
-    guiState.camera = cameras[0].deviceId;
-  }
+//   if (cameras.length > 0) {
+//     guiState.camera = cameras[0].deviceId;
+//   }
 
-  const gui = new dat.GUI({ width: 300 });
+//   const gui = new dat.GUI({ width: 300 });
 
-  // The single-pose algorithm is faster and simpler but requires only one
-  // person to be in the frame or results will be innaccurate. Multi-pose works
-  // for more than 1 person
-  const algorithmController = gui.add(guiState, "algorithm", [
-    "single-pose",
-    "multi-pose"
-  ]);
+//   // The single-pose algorithm is faster and simpler but requires only one
+//   // person to be in the frame or results will be innaccurate. Multi-pose works
+//   // for more than 1 person
+//   const algorithmController = gui.add(guiState, "algorithm", [
+//     "single-pose",
+//     "multi-pose"
+//   ]);
 
-  // The input parameters have the most effect on accuracy and speed of the
-  // network
-  let input = gui.addFolder("Input");
-  // Architecture: there are a few PoseNet models varying in size and
-  // accuracy. 1.01 is the largest, but will be the slowest. 0.50 is the
-  // fastest, but least accurate.
-  const architectureController = input.add(
-    guiState.input,
-    "mobileNetArchitecture",
-    ["1.01", "1.00", "0.75", "0.50"]
-  );
-  // Output stride:  Internally, this parameter affects the height and width of
-  // the layers in the neural network. The lower the value of the output stride
-  // the higher the accuracy but slower the speed, the higher the value the
-  // faster the speed but lower the accuracy.
-  input.add(guiState.input, "outputStride", [8, 16, 32]);
-  // Image scale factor: What to scale the image by before feeding it through
-  // the network.
-  input
-    .add(guiState.input, "imageScaleFactor")
-    .min(0.2)
-    .max(1.0);
-  input.open();
+//   // The input parameters have the most effect on accuracy and speed of the
+//   // network
+//   let input = gui.addFolder("Input");
+//   // Architecture: there are a few PoseNet models varying in size and
+//   // accuracy. 1.01 is the largest, but will be the slowest. 0.50 is the
+//   // fastest, but least accurate.
+//   const architectureController = input.add(
+//     guiState.input,
+//     "mobileNetArchitecture",
+//     ["1.01", "1.00", "0.75", "0.50"]
+//   );
+//   // Output stride:  Internally, this parameter affects the height and width of
+//   // the layers in the neural network. The lower the value of the output stride
+//   // the higher the accuracy but slower the speed, the higher the value the
+//   // faster the speed but lower the accuracy.
+//   input.add(guiState.input, "outputStride", [8, 16, 32]);
+//   // Image scale factor: What to scale the image by before feeding it through
+//   // the network.
+//   input
+//     .add(guiState.input, "imageScaleFactor")
+//     .min(0.2)
+//     .max(1.0);
+//   input.open();
 
-  // Pose confidence: the overall confidence in the estimation of a person's
-  // pose (i.e. a person detected in a frame)
-  // Min part confidence: the confidence that a particular estimated keypoint
-  // position is accurate (i.e. the elbow's position)
-  let single = gui.addFolder("Single Pose Detection");
-  single.add(guiState.singlePoseDetection, "minPoseConfidence", 0.0, 1.0);
-  single.add(guiState.singlePoseDetection, "minPartConfidence", 0.0, 1.0);
+//   // Pose confidence: the overall confidence in the estimation of a person's
+//   // pose (i.e. a person detected in a frame)
+//   // Min part confidence: the confidence that a particular estimated keypoint
+//   // position is accurate (i.e. the elbow's position)
+//   let single = gui.addFolder("Single Pose Detection");
+//   single.add(guiState.singlePoseDetection, "minPoseConfidence", 0.0, 1.0);
+//   single.add(guiState.singlePoseDetection, "minPartConfidence", 0.0, 1.0);
 
-  let multi = gui.addFolder("Multi Pose Detection");
-  multi
-    .add(guiState.multiPoseDetection, "maxPoseDetections")
-    .min(1)
-    .max(20)
-    .step(1);
-  multi.add(guiState.multiPoseDetection, "minPoseConfidence", 0.0, 1.0);
-  multi.add(guiState.multiPoseDetection, "minPartConfidence", 0.0, 1.0);
-  // nms Radius: controls the minimum distance between poses that are returned
-  // defaults to 20, which is probably fine for most use cases
-  multi
-    .add(guiState.multiPoseDetection, "nmsRadius")
-    .min(0.0)
-    .max(40.0);
-  multi.open();
+//   let multi = gui.addFolder("Multi Pose Detection");
+//   multi
+//     .add(guiState.multiPoseDetection, "maxPoseDetections")
+//     .min(1)
+//     .max(20)
+//     .step(1);
+//   multi.add(guiState.multiPoseDetection, "minPoseConfidence", 0.0, 1.0);
+//   multi.add(guiState.multiPoseDetection, "minPartConfidence", 0.0, 1.0);
+//   // nms Radius: controls the minimum distance between poses that are returned
+//   // defaults to 20, which is probably fine for most use cases
+//   multi
+//     .add(guiState.multiPoseDetection, "nmsRadius")
+//     .min(0.0)
+//     .max(40.0);
+//   multi.open();
 
-  let output = gui.addFolder("Output");
-  output.add(guiState.output, "showVideo");
-  output.add(guiState.output, "showSkeleton");
-  output.add(guiState.output, "showPoints");
-  output.add(guiState.output, "showBoundingBox");
-  output.open();
+//   let output = gui.addFolder("Output");
+//   output.add(guiState.output, "showVideo");
+//   output.add(guiState.output, "showSkeleton");
+//   output.add(guiState.output, "showPoints");
+//   output.add(guiState.output, "showBoundingBox");
+//   output.open();
 
-  architectureController.onChange(function(architecture) {
-    guiState.changeToArchitecture = architecture;
-  });
+//   architectureController.onChange(function (architecture) {
+//     guiState.changeToArchitecture = architecture;
+//   });
 
-  algorithmController.onChange(function(value) {
-    switch (guiState.algorithm) {
-      case "single-pose":
-        multi.close();
-        single.open();
-        break;
-      case "multi-pose":
-        single.close();
-        multi.open();
-        break;
-    }
-  });
-}
+//   algorithmController.onChange(function (value) {
+//     switch (guiState.algorithm) {
+//       case "single-pose":
+//         multi.close();
+//         single.open();
+//         break;
+//       case "multi-pose":
+//         single.close();
+//         multi.open();
+//         break;
+//     }
+//   });
+// }
 
 /**
  * Sets up a frames per second panel on the top-left of the window
@@ -214,13 +214,18 @@ export let nose2;
 function detectPoseInRealTime(video, net) {
   const canvas = document.getElementById("output");
   const ctx = canvas.getContext("2d");
+  const backgroundCanvas = document.getElementById("background");
+  const backgroundctx = backgroundCanvas.getContext("2d");
+  backgroundctx.fillStyle = "orange";
   // since images are being fed from a webcam
   const flipHorizontal = true;
 
   canvas.width = videoWidth;
   canvas.height = videoHeight;
+  backgroundCanvas.width = videoWidth;
+  backgroundCanvas.height = videoHeight;
 
-  async function poseDetectionFrame() {
+  async function poseDetectionFrame(prevPoses = []) {
     if (guiState.changeToArchitecture) {
       // Important to purge variables and free up GPU memory
       guiState.net.dispose();
@@ -244,42 +249,42 @@ function detectPoseInRealTime(video, net) {
     let minPoseConfidence;
     let minPartConfidence;
 
-    switch (guiState.algorithm) {
-      case "single-pose":
-        const pose = await guiState.net.estimateSinglePose(
-          video,
-          imageScaleFactor,
-          flipHorizontal,
-          outputStride
-        );
-        poses.push(pose);
+    // switch (guiState.algorithm) {
+    //   case "single-pose":
+    const pose = await guiState.net.estimateSinglePose(
+      video,
+      imageScaleFactor,
+      flipHorizontal,
+      outputStride
+    );
+    poses.push(pose);
 
-        minPoseConfidence = +guiState.singlePoseDetection.minPoseConfidence;
-        minPartConfidence = +guiState.singlePoseDetection.minPartConfidence;
-        break;
-      case "multi-pose":
-        poses = await guiState.net.estimateMultiplePoses(
-          video,
-          imageScaleFactor,
-          flipHorizontal,
-          outputStride,
-          guiState.multiPoseDetection.maxPoseDetections,
-          guiState.multiPoseDetection.minPartConfidence,
-          guiState.multiPoseDetection.nmsRadius
-        );
+    minPoseConfidence = +guiState.singlePoseDetection.minPoseConfidence;
+    minPartConfidence = +guiState.singlePoseDetection.minPartConfidence;
+    // break;
+    // case "multi-pose":
+    //   poses = await guiState.net.estimateMultiplePoses(
+    //     video,
+    //     imageScaleFactor,
+    //     flipHorizontal,
+    //     outputStride,
+    //     guiState.multiPoseDetection.maxPoseDetections,
+    //     guiState.multiPoseDetection.minPartConfidence,
+    //     guiState.multiPoseDetection.nmsRadius
+    //   );
 
-        minPoseConfidence = +guiState.multiPoseDetection.minPoseConfidence;
-        minPartConfidence = +guiState.multiPoseDetection.minPartConfidence;
-        if (poses.length) {
-          nose1 = poses[0].keypoints[0].position.x;
-          nose2 = poses[0].keypoints[0].position.y;
-        }
+    //   minPoseConfidence = +guiState.multiPoseDetection.minPoseConfidence;
+    //   minPartConfidence = +guiState.multiPoseDetection.minPartConfidence;
+    //   if (poses.length) {
+    //     nose1 = poses[0].keypoints[0].position.x;
+    //     nose2 = poses[0].keypoints[0].position.y;
+    //   }
 
-        // console.log("NOSE1--->", nose1, "\n", "NOSE2---->", nose2);
-        break;
-    }
+    //   // console.log("NOSE1--->", nose1, "\n", "NOSE2---->", nose2);
+    //   break;
+    // }
 
-    ctx.clearRect(0, 0, videoWidth, videoHeight);
+    // ctx.clearRect(0, 0, videoWidth, videoHeight);
 
     if (guiState.output.showVideo) {
       // if (poses && poses.length > 0) {
@@ -288,34 +293,52 @@ function detectPoseInRealTime(video, net) {
       //   console.log(poses[0].keypoints[0].position.x);
       // }
 
-      ctx.save();
-      ctx.scale(-1, 1);
-      ctx.translate(-videoWidth, 0);
-      ctx.drawImage(video, 0, 0, videoWidth, videoHeight);
-      ctx.restore();
+      // ctx.save();
+      // ctx.scale(-1, 1);
+      // ctx.translate(-videoWidth, 0);
+      // ctx.restore();
+
+
+      backgroundctx.save();
+      backgroundctx.scale(-1, 1);
+      backgroundctx.translate(-videoWidth, 0);
+      backgroundctx.drawImage(video, 0, 0, videoWidth, videoHeight);
+      backgroundctx.restore();
     }
 
     // For each pose (i.e. person) detected in an image, loop through the poses
     // and draw the resulting skeleton and keypoints if over certain confidence
     // scores
     poses.forEach(({ score, keypoints }) => {
+      // console.log(keypoints)
       if (score >= minPoseConfidence) {
         if (guiState.output.showPoints) {
-          drawKeypoints(keypoints, minPartConfidence, ctx);
+          drawKeypoints([keypoints[0]], minPartConfidence, ctx);
         }
-        if (guiState.output.showSkeleton) {
-          drawSkeleton(keypoints, minPartConfidence, ctx);
+        if (prevPoses.length) {
+          console.log(prevPoses[0]);
+          drawLineBetweenPoints([keypoints[0], prevPoses[0].keypoints[0]], ctx);
+          //   console.log(prevPoses[0].keypoints[0].position);
         }
-        if (guiState.output.showBoundingBox) {
-          drawBoundingBox(keypoints, ctx);
-        }
+
+        // if (guiState.output.showSkeleton) {
+        //   drawSkeleton(keypoints, minPartConfidence, ctx);
+        // }
+        // if (guiState.output.showBoundingBox) {
+        //   drawBoundingBox(keypoints, ctx);
+        // }
       }
     });
 
     // End monitoring code for frames per second
     stats.end();
 
-    requestAnimationFrame(poseDetectionFrame);
+    // console.log('in the right place');
+
+
+    //tried to get rid of requestAnimationFram
+    poseDetectionFrame(poses);
+    // requestAnimationFrame(poseDetectionFrame);
   }
 
   poseDetectionFrame();
