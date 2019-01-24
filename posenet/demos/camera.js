@@ -18,7 +18,7 @@ import * as posenet from "@tensorflow-models/posenet";
 import dat from "dat.gui";
 import Stats from "stats.js";
 
-import { drawBoundingBox, drawKeypoints, drawSkeleton } from "./demo_util";
+import { drawBoundingBox, drawKeypoints, drawSkeleton, drawLineBetweenPoints } from "./demo_util";
 
 export const videoWidth = 600;
 const videoHeight = 500;
@@ -177,11 +177,11 @@ function setupGui(cameras, net) {
   output.add(guiState.output, "showBoundingBox");
   output.open();
 
-  architectureController.onChange(function(architecture) {
+  architectureController.onChange(function (architecture) {
     guiState.changeToArchitecture = architecture;
   });
 
-  algorithmController.onChange(function(value) {
+  algorithmController.onChange(function (value) {
     switch (guiState.algorithm) {
       case "single-pose":
         multi.close();
@@ -214,13 +214,16 @@ export let nose2;
 function detectPoseInRealTime(video, net) {
   const canvas = document.getElementById("output");
   const ctx = canvas.getContext("2d");
+  const backgroundCanvas = document.getElementById("background");
+  const backgroundctx = backgroundCanvas.getContext("2d");
+  backgroundctx.fillStyle = "orange";
   // since images are being fed from a webcam
   const flipHorizontal = true;
 
   canvas.width = videoWidth;
   canvas.height = videoHeight;
 
-  async function poseDetectionFrame() {
+  async function poseDetectionFrame(prevPoses = []) {
     if (guiState.changeToArchitecture) {
       // Important to purge variables and free up GPU memory
       guiState.net.dispose();
@@ -244,42 +247,42 @@ function detectPoseInRealTime(video, net) {
     let minPoseConfidence;
     let minPartConfidence;
 
-    switch (guiState.algorithm) {
-      case "single-pose":
-        const pose = await guiState.net.estimateSinglePose(
-          video,
-          imageScaleFactor,
-          flipHorizontal,
-          outputStride
-        );
-        poses.push(pose);
+    // switch (guiState.algorithm) {
+    //   case "single-pose":
+    const pose = await guiState.net.estimateSinglePose(
+      video,
+      imageScaleFactor,
+      flipHorizontal,
+      outputStride
+    );
+    poses.push(pose);
 
-        minPoseConfidence = +guiState.singlePoseDetection.minPoseConfidence;
-        minPartConfidence = +guiState.singlePoseDetection.minPartConfidence;
-        break;
-      case "multi-pose":
-        poses = await guiState.net.estimateMultiplePoses(
-          video,
-          imageScaleFactor,
-          flipHorizontal,
-          outputStride,
-          guiState.multiPoseDetection.maxPoseDetections,
-          guiState.multiPoseDetection.minPartConfidence,
-          guiState.multiPoseDetection.nmsRadius
-        );
+    minPoseConfidence = +guiState.singlePoseDetection.minPoseConfidence;
+    minPartConfidence = +guiState.singlePoseDetection.minPartConfidence;
+    // break;
+    // case "multi-pose":
+    //   poses = await guiState.net.estimateMultiplePoses(
+    //     video,
+    //     imageScaleFactor,
+    //     flipHorizontal,
+    //     outputStride,
+    //     guiState.multiPoseDetection.maxPoseDetections,
+    //     guiState.multiPoseDetection.minPartConfidence,
+    //     guiState.multiPoseDetection.nmsRadius
+    //   );
 
-        minPoseConfidence = +guiState.multiPoseDetection.minPoseConfidence;
-        minPartConfidence = +guiState.multiPoseDetection.minPartConfidence;
-        if (poses.length) {
-          nose1 = poses[0].keypoints[0].position.x;
-          nose2 = poses[0].keypoints[0].position.y;
-        }
+    //   minPoseConfidence = +guiState.multiPoseDetection.minPoseConfidence;
+    //   minPartConfidence = +guiState.multiPoseDetection.minPartConfidence;
+    //   if (poses.length) {
+    //     nose1 = poses[0].keypoints[0].position.x;
+    //     nose2 = poses[0].keypoints[0].position.y;
+    //   }
 
-        // console.log("NOSE1--->", nose1, "\n", "NOSE2---->", nose2);
-        break;
-    }
+    //   // console.log("NOSE1--->", nose1, "\n", "NOSE2---->", nose2);
+    //   break;
+    // }
 
-    ctx.clearRect(0, 0, videoWidth, videoHeight);
+    // ctx.clearRect(0, 0, videoWidth, videoHeight);
 
     if (guiState.output.showVideo) {
       // if (poses && poses.length > 0) {
@@ -291,31 +294,49 @@ function detectPoseInRealTime(video, net) {
       ctx.save();
       ctx.scale(-1, 1);
       ctx.translate(-videoWidth, 0);
-      ctx.drawImage(video, 0, 0, videoWidth, videoHeight);
       ctx.restore();
+
+
+      // backgroundctx.save();
+      // backgroundctx.scale(-1, 1);
+      // backgroundctx.translate(-videoWidth, 0);
+      // backgroundctx.drawImage(video, 0, 0, videoWidth, videoHeight);
+      // backgroundctx.restore();
     }
 
     // For each pose (i.e. person) detected in an image, loop through the poses
     // and draw the resulting skeleton and keypoints if over certain confidence
     // scores
     poses.forEach(({ score, keypoints }) => {
+      // console.log(keypoints)
       if (score >= minPoseConfidence) {
         if (guiState.output.showPoints) {
-          drawKeypoints(keypoints, minPartConfidence, ctx);
+          drawKeypoints([keypoints[0]], minPartConfidence, ctx);
         }
-        if (guiState.output.showSkeleton) {
-          drawSkeleton(keypoints, minPartConfidence, ctx);
+        if (prevPoses.length) {
+          console.log(prevPoses[0]);
+          drawLineBetweenPoints([keypoints[0], prevPoses[0].keypoints[0]], ctx);
+          //   console.log(prevPoses[0].keypoints[0].position);
         }
-        if (guiState.output.showBoundingBox) {
-          drawBoundingBox(keypoints, ctx);
-        }
+
+        // if (guiState.output.showSkeleton) {
+        //   drawSkeleton(keypoints, minPartConfidence, ctx);
+        // }
+        // if (guiState.output.showBoundingBox) {
+        //   drawBoundingBox(keypoints, ctx);
+        // }
       }
     });
 
     // End monitoring code for frames per second
     stats.end();
 
-    requestAnimationFrame(poseDetectionFrame);
+    // console.log('in the right place');
+
+
+    //tried to get rid of requestAnimationFram
+    poseDetectionFrame(poses);
+    // requestAnimationFrame(poseDetectionFrame);
   }
 
   poseDetectionFrame();
